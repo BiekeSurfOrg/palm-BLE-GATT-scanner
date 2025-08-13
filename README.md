@@ -4,8 +4,56 @@ This project consists of a backend and a frontend to scan for Bluetooth Low Ener
 
 ## Project Structure
 
-- `backend/`: Contains the Python script for BLE scanning and GATT communication.
+- `backend/`: Contains Python scripts for BLE scanning and GATT communication.
 - `frontend/`: Contains the web interface for displaying status and data.
+
+## Functional Description
+
+### `app.py`
+
+This script scans for BLE advertisements containing "PALMKI" in their manufacturer data. When a device is found, it automatically establishes a GATT connection and retrieves service and characteristic data. This version does not require user authorization for GATT connections.
+
+**Step-by-step functionality:**
+
+1. Initializes a Flask web application.
+2. Defines a `/scan` endpoint that handles BLE scanning.
+3. Uses `BleakScanner` to discover BLE devices.
+4. Filters devices based on the presence of "PALMKI" in their manufacturer data.
+5. If a target device is found, it attempts to connect using `BleakClient`.
+6. Discovers GATT services and characteristics of the connected device.
+7. Reads data from readable characteristics and displays it.
+8. Returns the scan results and GATT data as JSON to the frontend.
+
+### `app-scan-all.py`
+
+This script scans for all BLE packages and requires user authorization for GATT connections.
+
+**Step-by-step functionality:**
+
+1. Initializes a Flask web application.
+2. Defines a `/scan` endpoint that handles BLE scanning.
+3. Uses `BleakScanner` to discover all available BLE devices without filtering.
+4. Presents a list of all discovered devices to the user.
+5. If the user selects a device and authorizes the connection, it attempts to connect using `BleakClient`.
+6. Discovers GATT services and characteristics of the connected device.
+7. Reads data from readable characteristics and displays it.
+8. Returns the scan results and GATT data as JSON to the frontend.
+
+### `ble_scanner.py`
+
+This script performs BLE scanning without a frontend. It checks for devices with "PALMKI" in their manufacturer data, establishes GATT connections to matching devices, and reads service and characteristic data. It includes error handling for connection and data reading. The script needs user authorisation to make the connection.
+
+**Step-by-step functionality:**
+
+1. Initializes `BleakScanner` for device discovery.
+2. Scans for all available BLE devices.
+3. Iterates through discovered devices, checking their manufacturer data for the "PALMKI" string.
+4. If "PALMKI" is found, it designates that device as the target.
+5. Attempts to establish a GATT connection to the target device using `BleakClient`.
+6. Upon successful connection, it discovers all services and characteristics.
+7. For each characteristic with a 'read' property, it attempts to read its value.
+8. Prints the device information, manufacturer data, and characteristic values to the console.
+9. Includes error handling for decoding issues, connection failures, and characteristic read errors.
 
 ## Getting Started
 
@@ -20,10 +68,22 @@ This project consists of a backend and a frontend to scan for Bluetooth Low Ener
    pip install -r requirements.txt
    ```
 3. Run the Flask application:
+
+   There are two main backend scripts:
+
+   a. **`app.py`**: Scans for "PALMKI" in manufacturer data and automatically connects to the device if found. No user authorization is needed for the GATT connection.
+
    ```bash
    python app.py
    ```
-   The backend server will run on `http://127.0.0.1:5001`.
+
+   b. **`app-scan-all.py`**: Scans for all BLE packages and requires user authorization to make a GATT connection.
+
+   ```bash
+   python app-scan-all.py
+   ```
+
+   Both backend servers will run on `http://127.0.0.1:5001`.
 
 ### Frontend
 
