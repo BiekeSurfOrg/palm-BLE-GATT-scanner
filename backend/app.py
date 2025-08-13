@@ -27,6 +27,10 @@ SCAN_SECONDS      = 5.0
 CONNECT_TIMEOUT_S = 10.0
 MAC = platform.system().lower() == "darwin"
 
+NOTIFY_WAIT_TOTAL_S = 8.0   # how long to wait for all chunks
+NOTIFY_POLL_STEP_S  = 0.05  # polling interval while waiting
+
+
 # -------------------- Dedicated, long-lived asyncio loop --------------------
 _ble_loop: asyncio.AbstractEventLoop | None = None
 
@@ -154,7 +158,7 @@ async def _perform_ble_scan_core() -> Dict[str, str]:
     if not target:
         return {"status": "No BLE package found", "info": ""}
 
-    # 3) Connect and ONLY read your target characteristic (to avoid pairing popups)
+        # 3) Connect and stream via NOTIFY (reassemble frames)
     status = "creating GATT"
     mfg_hex = next(iter(target["manufacturer_data"].values()))
     info =  f"Device Address: {target['address']}\n"
@@ -168,26 +172,65 @@ async def _perform_ble_scan_core() -> Dict[str, str]:
             status = "receiving GATT"
             info += f"Connected to {target['address']}\n"
 
+            # --- Notification reassembly state ---
+            chunks: Dict[int, bytes] = {}
+            total_frames: Optional[int] = None
+
+            def handle_frame(_, data: bytearray):
+                nonlocal total_frames
+                # Expect at least 6 header bytes
+                if len(data) < 6:
+                    return
+                seq   = data[0] | (data[1] << 8)
+                total = data[2] | (data[3] << 8)
+                ln    = data[4] | (data[5] << 8)
+                # bounds guard
+                if 6 + ln > len(data):
+                    return
+                payload = bytes(data[6:6+ln])
+                chunks[seq] = payload
+                total_frames = total
+
             try:
-                value = await client.read_gatt_char(CHAR_UUID)
-                # Prefer UTF-8, fallback to hex
-                try:
-                    decoded = value.decode("utf-8")
-                    info += f"  Service: {SERVICE_UUID}\n"
-                    info += f"    Characteristic: {CHAR_UUID}, Properties: ['read']\n"
-                    info += f"      Value: {decoded}\n"
-                except UnicodeDecodeError:
-                    info += f"  Service: {SERVICE_UUID}\n"
-                    info += f"    Characteristic: {CHAR_UUID}, Properties: ['read']\n"
-                    info += f"      Value (hex): {value.hex()}\n"
+                # Enable notifications (writes CCCD=0x0001)
+                await client.start_notify(CHAR_UUID, handle_frame)
+
+                # Wait until all frames arrive or timeout
+                waited = 0.0
+                while (total_frames is None) or (len(chunks) < total_frames):
+                    await asyncio.sleep(NOTIFY_POLL_STEP_S)
+                    waited += NOTIFY_POLL_STEP_S
+                    if waited >= NOTIFY_WAIT_TOTAL_S:
+                        break
+
+                await client.stop_notify(CHAR_UUID)
+
+                if total_frames is None:
+                    info += "  Did not receive any notification frames.\n"
+                elif len(chunks) < total_frames:
+                    info += f"  Incomplete: got {len(chunks)}/{total_frames} frames before timeout.\n"
+                else:
+                    # Reassemble in order
+                    assembled = b"".join(chunks[i] for i in range(total_frames))
+                    try:
+                        decoded = assembled.decode("utf-8")
+                        info += f"  Service: {SERVICE_UUID}\n"
+                        info += f"    Characteristic: {CHAR_UUID}, Properties: ['notify']\n"
+                        info += f"      Value: {decoded}\n"
+                    except UnicodeDecodeError:
+                        info += f"  Service: {SERVICE_UUID}\n"
+                        info += f"    Characteristic: {CHAR_UUID}, Properties: ['notify']\n"
+                        info += f"      Value (hex): {assembled.hex()}\n"
+
             except Exception as e:
-                info += f"  Failed to read target characteristic: {e}\n"
+                info += f"  Notification/assembly error: {e}\n"
 
             status = "Finished"
     except Exception as e:
         status = f"Error during connection or communication: {e}"
 
     return {"status": status, "info": info}
+
 
 # -------------------- Flask route (runs work on the BLE loop) --------------------
 @app.route('/scan', methods=['GET'])
