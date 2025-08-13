@@ -2,3 +2,5 @@ bleak
 asyncio
 Flask[async]
 Flask-Cors
+qrcode
+Pillow

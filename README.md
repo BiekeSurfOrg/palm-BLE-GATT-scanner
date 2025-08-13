@@ -41,7 +41,7 @@ This script scans for all BLE packages and requires user authorization for GATT 
 
 ### `ble_scanner.py`
 
-This script performs BLE scanning without a frontend. It checks for devices with "PALMKI" in their manufacturer data, establishes GATT connections to matching devices, and reads service and characteristic data. It includes error handling for connection and data reading. The script needs user authorisation to make the connection.
+This script performs BLE scanning, checks for devices with "PALMKI" in their manufacturer data, establishes GATT connections to matching devices, and reads service and characteristic data. It includes error handling for connection and data reading.
 
 **Step-by-step functionality:**
 
@@ -55,7 +55,33 @@ This script performs BLE scanning without a frontend. It checks for devices with
 8. Prints the device information, manufacturer data, and characteristic values to the console.
 9. Includes error handling for decoding issues, connection failures, and characteristic read errors.
 
+### `qr-code-generator.py`
+
+This script generates a QR code containing a predefined JSON payload. The QR code is saved as a PNG image.
+
+**Step-by-step functionality:**
+
+1. Defines a Python dictionary `data` containing an `ID` and a `Hash`.
+2. Converts the `data` dictionary into a JSON string.
+3. Initializes a `qrcode.QRCode` instance with specified version, error correction, box size, and border.
+4. Adds the JSON string to the QR code instance.
+5. Generates the QR code image.
+6. Saves the generated QR code image as `palm_qr_code.png`.
+
 ## Getting Started
+
+### QR code generation
+
+1. Navigate to the `backend` directory:
+   ```bash
+   cd backend
+   ```
+2. Run the `qr-code-generator.py` script:
+   ```bash
+   python qr-code-generator.py
+   ```
+   This will generate a QR code image named `palm_qr_code.png` in the same directory.
+   The QR code can be scanned by the Palmki android app so it can transfer that data to the BLE scanner app (app.py) via GATT connection.
 
 ### Backend
 
