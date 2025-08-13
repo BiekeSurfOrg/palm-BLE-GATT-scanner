@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BLE Scanner</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #0056b3;
+        }
+
+        pre {
+            background-color: #e2e2e2;
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        #status {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>BLE GATT Scanner</h1>
+        <p>Status: <span id="status">No BLE package found</span></p>
+        <h2>BLE/GATT Information:</h2>
+        <pre id="info"></pre>
+    </div>
+
+    <script>
+        const statusElement = document.getElementById('status');
+        const infoElement = document.getElementById('info');
+
+        async function fetchBleData() {
+            updateStatus("Scanning for BLE packages...");
+            updateInfo("");
+            try {
+                const response = await fetch('http://127.0.0.1:5001/scan');
+                const data = await response.json();
+                updateStatus(data.status);
+                updateInfo(data.info);
+            } catch (error) {
+                console.error('Error fetching BLE data:', error);
+                updateStatus("Error during scan");
+                updateInfo("Could not connect to backend. Make sure the backend server is running.");
+            }
+        }
+
+        function updateStatus(newStatus) {
+            statusElement.textContent = newStatus;
+        }
+
+        function updateInfo(newInfo) {
+            infoElement.textContent = newInfo;
+        }
+
+        // Initial scan when page loads
+        fetchBleData();
+
+
+
+    </script>
+</body>
+
+</html>
