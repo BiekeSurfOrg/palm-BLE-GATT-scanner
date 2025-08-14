@@ -169,123 +169,67 @@ async def _perform_ble_scan_core() -> Dict[str, str]:
             if not client.is_connected:
                 return {"status": f"Failed to connect to {target['address']}", "info": info}
 
+            status = "receiving GATT"
             info += f"Connected to {target['address']}\n"
-            status = "discovering_services"
-            target_characteristic_obj = None
-            try:
-                info += "  Discovering services...\n"
-                # CORRECTED WAY TO ACCESS SERVICES:
-                # The client.services property is a BleakGATTServiceCollection,
-                # which can be iterated or accessed by UUID.
-                # Explicitly calling a method like discover_services() or get_services()
-                # might be needed if services aren't populated automatically after connection,
-                # but often they are. Let's assume they are populated or Bleak handles it.
 
-                # Iterate through discovered services
-                for service_uuid_str, service_obj in client.services.services.items():
-                    if service_obj.uuid.lower() == SERVICE_UUID.lower():
-                        info += f"  Found service: {service_obj.uuid} (Handle: {service_obj.handle})\n"
-                        for char_obj in service_obj.characteristics:
-                            if char_obj.uuid.lower() == CHAR_UUID.lower():
-                                info += f"  Found characteristic: {char_obj.uuid} (Handle: {char_obj.handle}, Properties: {char_obj.properties})\n"
-                                if "notify" in char_obj.properties:
-                                    target_characteristic_obj = char_obj
-                                    break  # Found the target characteristic
-                                else:
-                                    info += f"    Characteristic {char_obj.uuid} does not support notify.\n"
-                        if target_characteristic_obj:
-                            break  # Found the target service and characteristic
-                
-                if not target_characteristic_obj:
-                    info += f"  Target characteristic {CHAR_UUID} with notify property not found in service {SERVICE_UUID}.\n"
-                    # status will be handled before attempting start_notify
-            
-            except Exception as e:
-                info += f"  Error during service discovery: {e}\n"
-                # status will be handled before attempting start_notify
-            status = "receiving_gatt_notifications" # Updated status
             # --- Notification reassembly state ---
             chunks: Dict[int, bytes] = {}
             total_frames: Optional[int] = None
 
             def handle_frame(_, data: bytearray):
                 nonlocal total_frames
+                # Expect at least 6 header bytes
                 if len(data) < 6:
-                    info += f"  Received runt frame (len {len(data)}), skipping.\n"
                     return
                 seq   = data[0] | (data[1] << 8)
                 total = data[2] | (data[3] << 8)
                 ln    = data[4] | (data[5] << 8)
+                # bounds guard
                 if 6 + ln > len(data):
-                    info += f"  Received frame with invalid length spec (header_len={ln}, actual_data_len={len(data)-6}), skipping.\n"
                     return
                 payload = bytes(data[6:6+ln])
                 chunks[seq] = payload
                 total_frames = total
 
             try:
-                # <<< MODIFICATION: Use target_characteristic_obj if found >>>
-                if not target_characteristic_obj:
-                    # This check is now more crucial after explicit discovery
-                    info += "  Cannot start notifications: target characteristic was not resolved.\n"
-                    status = "characteristic_resolve_failed_before_notify"
-                else:
-                    info += f"  Attempting to start notifications on characteristic handle {target_characteristic_obj.handle}...\n"
-                    await client.start_notify(target_characteristic_obj, handle_frame) # Use the object
+                # Enable notifications (writes CCCD=0x0001)
+                await client.start_notify(CHAR_UUID, handle_frame)
 
-                    waited = 0.0
-                    while (total_frames is None) or (len(chunks) < total_frames):
-                        await asyncio.sleep(NOTIFY_POLL_STEP_S)
-                        waited += NOTIFY_POLL_STEP_S
-                        if waited >= NOTIFY_WAIT_TOTAL_S:
-                            break
-                    
-                    info += "  Stopping notifications...\n"
-                    await client.stop_notify(target_characteristic_obj) # Use the object
-                # <<< MODIFICATION END >>>
+                # Wait until all frames arrive or timeout
+                waited = 0.0
+                while (total_frames is None) or (len(chunks) < total_frames):
+                    await asyncio.sleep(NOTIFY_POLL_STEP_S)
+                    waited += NOTIFY_POLL_STEP_S
+                    if waited >= NOTIFY_WAIT_TOTAL_S:
+                        break
 
-                if total_frames is None and target_characteristic_obj : # only log if we attempted notifications
-                    info += "  Did not receive any notification frames (total_frames is None).\n"
-                elif total_frames is not None and len(chunks) < total_frames:
+                await client.stop_notify(CHAR_UUID)
+
+                if total_frames is None:
+                    info += "  Did not receive any notification frames.\n"
+                elif len(chunks) < total_frames:
                     info += f"  Incomplete: got {len(chunks)}/{total_frames} frames before timeout.\n"
-                elif total_frames is not None:
-                    assembled_data = b""
-                    missing_frame_in_reassembly = False
-                    for i in range(total_frames):
-                        if i not in chunks:
-                            info += f"  Error during reassembly: Missing frame {i}.\n"
-                            missing_frame_in_reassembly = True
-                            break
-                        assembled_data += chunks[i]
-                    
-                    if not missing_frame_in_reassembly:
-                        try:
-                            decoded = assembled_data.decode("utf-8")
-                            info += f"  Service: {SERVICE_UUID}\n" # You can get actual service UUID from service_obj.uuid
-                            info += f"    Characteristic: {CHAR_UUID}, Properties: {target_characteristic_obj.properties if target_characteristic_obj else 'N/A'}\n"
-                            info += f"      Value: {decoded}\n"
-                        except UnicodeDecodeError:
-                            info += f"  Service: {SERVICE_UUID}\n"
-                            info += f"    Characteristic: {CHAR_UUID}, Properties: {target_characteristic_obj.properties if target_characteristic_obj else 'N/A'}\n"
-                            info += f"      Value (hex): {assembled_data.hex()}\n"
-                    else:
-                        info += "  Could not fully reassemble data due to missing frames.\n"
-                  
-                status = "finished_gatt_operations"
+                else:
+                    # Reassemble in order
+                    assembled = b"".join(chunks[i] for i in range(total_frames))
+                    try:
+                        decoded = assembled.decode("utf-8")
+                        info += f"  Service: {SERVICE_UUID}\n"
+                        info += f"    Characteristic: {CHAR_UUID}, Properties: ['notify']\n"
+                        info += f"      Value: {decoded}\n"
+                    except UnicodeDecodeError:
+                        info += f"  Service: {SERVICE_UUID}\n"
+                        info += f"    Characteristic: {CHAR_UUID}, Properties: ['notify']\n"
+                        info += f"      Value (hex): {assembled.hex()}\n"
 
             except Exception as e:
-                info += f"  Error during notification handling or assembly: {e}\n"
-                status = f"notification_error_exception" # More specific status
+                info += f"  Notification/assembly error: {e}\n"
 
-    except BleakError as be: # Catch Bleak specific errors first
-        status = f"bleak_error_during_connection"
-        info += f"BleakError: {be}\n"
+            status = "Finished"
     except Exception as e:
-        status = f"general_error_during_connection"
-        info += f"Exception: {e}\n"
+        status = f"Error during connection or communication: {e}"
 
     return {"status": status, "info": info}
-
 
 
 # -------------------- Flask route (runs work on the BLE loop) --------------------
