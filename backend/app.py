@@ -163,6 +163,16 @@ async def _perform_ble_scan_core() -> Dict[str, str]:
     mfg_hex = next(iter(target["manufacturer_data"].values()))
     info =  f"Device Address: {target['address']}\n"
     info += f"Manufacturer Data: {mfg_hex}\n"
+    # Parse the manufacturer data based on the Kotlin buildManufacturerPayload function:
+    # [version(1B)=0x01][“PALMKI” ASCII][rolling counter (2B LE)]
+    mfg_bytes = bytes.fromhex(mfg_hex)
+    version = mfg_bytes[0]
+    tag = mfg_bytes[1:7].decode('utf-8', errors='ignore') # "PALMKI" is 6 bytes
+    # Rolling counter is 2 bytes, Little Endian
+    rolling_counter = int.from_bytes(mfg_bytes[7:9], byteorder='little')
+
+    manufacture_data_ascii = f"Version: {version}, Tag: {tag}, Counter: {rolling_counter}"
+    info += f"Manufacturer Data ASCII: {manufacture_data_ascii}\n"
 
     try:
         async with BleakClient(target["address"], timeout=CONNECT_TIMEOUT_S) as client:
