@@ -68,6 +68,21 @@ This script generates a QR code containing a predefined JSON payload. The QR cod
 5. Generates the QR code image.
 6. Saves the generated QR code image as `palm_qr_code.png`.
 
+### `app-use-addr-ble-device.py`
+
+This script is a copy of `app.py` but connects to a BLE device using its address instead of the device object. This is useful in scenarios where the device object might not be directly available or when reconnecting to a known device by its address.
+
+**Step-by-step functionality:**
+
+1. Initializes a Flask web application.
+2. Defines a `/scan` endpoint that handles BLE scanning.
+3. Uses `BleakScanner` to discover BLE devices.
+4. Filters devices based on the presence of "PALMKI" in their manufacturer data.
+5. If a target device is found, it attempts to connect using `BleakClient` by providing the device's address directly.
+6. Discovers GATT services and characteristics of the connected device.
+7. Reads data from readable characteristics and displays it.
+8. Returns the scan results and GATT data as JSON to the frontend.
+
 ## Getting Started
 
 ### QR code generation
@@ -107,6 +122,12 @@ This script generates a QR code containing a predefined JSON payload. The QR cod
 
    ```bash
    python app-scan-all.py
+   ```
+
+   c. **`app-use-addr-ble-device.py`**: Connects to a BLE device using its address instead of the device object.
+
+   ```bash
+   python app-use-addr-ble-device.py
    ```
 
    Both backend servers will run on `http://127.0.0.1:5001`.

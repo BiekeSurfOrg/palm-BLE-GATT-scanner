@@ -100,7 +100,6 @@ async def _scan_with_manufacturer_filter() -> Optional[Dict[str, Any]]:
                 hex_data = data.hex()
                 if TARGET_HEX in hex_data:
                     matches.append({
-                        "device_obj": dev, 
                         "name": dev.name,
                         "address": addr,  # on macOS this is a UUID-like identifier; Bleak accepts it
                         "rssi": adv.rssi,
@@ -123,7 +122,6 @@ async def _scan_with_manufacturer_filter() -> Optional[Dict[str, Any]]:
             hex_data = data.hex()
             if TARGET_HEX in hex_data:
                 matches.append({
-                    "device_obj": device, 
                     "name": device.name,
                     "address": device.address,
                     "rssi": advertisement_data.rssi,
@@ -196,8 +194,7 @@ async def _perform_ble_scan_core() -> Dict[str, str]:
 
     start_connect_time = time.time()
     try:
-        async with BleakClient(target["device_obj"], timeout=CONNECT_TIMEOUT_S) as client:
-        # async with BleakClient(target["address"], timeout=CONNECT_TIMEOUT_S) as client:
+        async with BleakClient(target["address"], timeout=CONNECT_TIMEOUT_S) as client:
             end_connect_time = time.time()
             logging.info(f"Connection to {target['address']} took {end_connect_time - start_connect_time:.2f} seconds.")
 
