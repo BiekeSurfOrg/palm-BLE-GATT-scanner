@@ -188,3 +188,6 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+# Added for archiving
+.DS_Store
+node_modules/

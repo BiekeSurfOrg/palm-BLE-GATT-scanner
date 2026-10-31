@@ -2,6 +2,32 @@
 
 This project consists of a backend and a frontend to scan for Bluetooth Low Energy (BLE) advertisements containing the text "PALMKI", establish a GATT connection, retrieve data, and display it.
 
+## Install
+
+```bash
+git clone https://github.com/BiekeSurfOrg/palm-BLE-GATT-scanner
+cd palm-BLE-GATT-scanner/backend
+python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+```
+
+Requirements: Python 3.9+, a machine with Bluetooth (developed on macOS; `bleak` uses CoreBluetooth there, so the terminal needs Bluetooth permission). No environment variables are needed. Note: `app.py` expects a peripheral advertising "PALMKI" in its manufacturer data and exposing the GATT service/characteristic UUIDs defined at the top of `app.py` (this is the `palm-ble-advertiser` Android app); the `palm-app` Android app can feed it data via the QR code.
+
+## Run
+
+```bash
+cd backend
+python app.py          # Flask server on http://127.0.0.1:5001, GET /scan
+open ../frontend/index.html   # static page that calls /scan
+```
+
+## Result / output
+
+`/scan` returns JSON with the scan results and the data read over GATT (service and characteristic values, chunks collected via notifications). The frontend shows status and the received payload. `ble_scanner.py` prints the same to the console. `qr-code-generator.py` writes `palm_qr_code.png`.
+
+## Status
+
+Last activity: August 2025. Archived on GitHub (BiekeSurfOrg/palm-BLE-GATT-scanner); the local copy is deleted. `app copy.py` is an old backup of `app.py`.
+
 ## Project Structure
 
 - `backend/`: Contains Python scripts for BLE scanning and GATT communication.
